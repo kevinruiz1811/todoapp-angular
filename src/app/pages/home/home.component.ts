@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, computed, signal, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 
@@ -12,28 +12,23 @@ import { Task } from '../../models/tasks.model';
   styleUrl: './home.component.css',
 })
 export class HomeComponent {
-  tasks = signal<Task[]>([
-    {
-      id: Date.now(),
-      title: 'Instalar angular',
-      completed: false,
-    },
-    {
-      id: Date.now(),
-      title: 'Crear el proyecto',
-      completed: false,
-    },
-    {
-      id: Date.now(),
-      title: 'Crear componentes',
-      completed: false,
-    },
-    {
-      id: Date.now(),
-      title: 'Iniciar a desarrollar',
-      completed: false,
-    },
-  ]);
+  tasks = signal<Task[]>([]);
+
+  filter = signal<'all' | 'pending' | 'completed'>('all');
+  taskByFilter = computed(() => {
+    const filter = this.filter();
+    const tasks = this.tasks();
+
+    if (filter === 'pending') {
+      return tasks.filter((task) => !task.completed);
+    }
+
+    if (filter === 'completed') {
+      return tasks.filter((task) => task.completed);
+    }
+
+    return tasks;
+  });
 
   newTaskCtrl = new FormControl('', {
     nonNullable: true,
@@ -44,10 +39,28 @@ export class HomeComponent {
     ],
   });
 
+  constructor() {
+    effect(() => {
+      const tasks = this.tasks();
+      localStorage.setItem('tasks', JSON.stringify(tasks));
+    });
+  }
+
+  ngOnInit() {
+    const storage = localStorage.getItem('tasks');
+    if (storage) {
+      const tasks = JSON.parse(storage);
+      this.tasks.set(tasks);
+    }
+  }
+
   changeHandler() {
     if (this.newTaskCtrl.valid) {
-      this.addTask(this.newTaskCtrl.value);
-      this.newTaskCtrl.setValue('');
+      const value = this.newTaskCtrl.value.trim();
+      if (value != '') {
+        this.addTask(value);
+        this.newTaskCtrl.setValue('');
+      }
     }
   }
 
@@ -78,5 +91,42 @@ export class HomeComponent {
         return task;
       });
     });
+  }
+
+  updateTasksEditingText(index: number, event: Event) {
+    const input = event.target as HTMLInputElement;
+    this.tasks.update((tasks) => {
+      return tasks.map((task, position) => {
+        if (position == index) {
+          return {
+            ...task,
+            title: input.value,
+            editing: false,
+          };
+        }
+        return task;
+      });
+    });
+  }
+
+  updateTasksEditingMode(index: number) {
+    this.tasks.update((tasks) => {
+      return tasks.map((task, position) => {
+        if (position == index) {
+          return {
+            ...task,
+            editing: true,
+          };
+        }
+        return {
+          ...task,
+          editing: false,
+        };
+      });
+    });
+  }
+
+  changeFilter(filter: 'all' | 'pending' | 'completed') {
+    this.filter.set(filter);
   }
 }
